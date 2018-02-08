@@ -125,7 +125,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       else printRoute(hop + 1, list.tail, acc + "\n" + hopName + " " + list.head.name)
     }
 
-    printRoute(0, computedPath.path, computedPath.source.name + " vers " + target + " :") + "\nTotal : " + (computedPath.path.length - 1) + " pages"
+    printRoute(0, computedPath.path, computedPath.source.name + " vers " + target + " :\n") + "\n\nTotal : " + (computedPath.path.length - 1) + " pages"
   }
 
   def tweetNext(): Unit = {
