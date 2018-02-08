@@ -4,6 +4,7 @@ import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.model.Element
 import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{element, elements}
+import org.jsoup.HttpStatusException
 
 class WikiBrowser(lang: String) {
   val browser = JsoupBrowser()
@@ -16,13 +17,17 @@ class WikiBrowser(lang: String) {
   }
 
   def getLinkElements(name: String): Iterable[Element] = {
-    (browser.get(getUrl(name)) >> element("#mw-content-text"))
-      .children.head.children
-      .filter(_.tagName == "p")
-      .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal):not(.extiw)"))
-      .filter(_.hasAttr("href"))
-      .filter(_.hasAttr("title"))
-      .filterNot(_.attr("href").startsWith("#"))
+    try {
+      (browser.get(getUrl(name)) >> element("#mw-content-text"))
+        .children.head.children
+        .filter(_.tagName == "p")
+        .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal):not(.extiw)"))
+        .filter(_.hasAttr("href"))
+        .filter(_.hasAttr("title"))
+        .filterNot(_.attr("href").startsWith("#"))
+    } catch {
+      case _: HttpStatusException => List()
+    }
   }
 
   def getLinks(name: String): Iterable[Article] =
