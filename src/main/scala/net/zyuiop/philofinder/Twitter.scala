@@ -119,7 +119,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def buildTweet(computedPath: ComputedPath): String = {
     def printRoute(hop: Int, list: List[Article], acc: String): String = {
-      val hopName = if (hop == 0) "\uD83C\uDFE0" else "⮑"
+      val hopName = if (hop == 0) "\uD83C\uDFE0" else "↳"
 
       if (list.isEmpty) acc
       else printRoute(hop + 1, list.tail, acc + "\n" + hopName + " " + list.head.name)
