@@ -47,7 +47,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     load()
 
     ex.scheduleAtFixedRate(() => computeNextPath(), 0, 10, TimeUnit.SECONDS)
-    ex.scheduleAtFixedRate(() => tweetNext(), 0, 10, TimeUnit.SECONDS)
+    ex.scheduleAtFixedRate(() => tweetNext(), 60, 10, TimeUnit.SECONDS)
     ex.scheduleAtFixedRate(() => logState(), 0, 1, TimeUnit.MINUTES)
     ex.scheduleAtFixedRate(() => save(), 0, 1, TimeUnit.MINUTES)
 
@@ -135,7 +135,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
     if (readyUser.nonEmpty) {
       lastTweet = System.currentTimeMillis()
-      // tweet(readyUser.dequeue())
+      tweet(readyUser.dequeue())
     } else if (readyAuto.nonEmpty) {
       lastTweet = System.currentTimeMillis()
       tweet(readyAuto.dequeue())
