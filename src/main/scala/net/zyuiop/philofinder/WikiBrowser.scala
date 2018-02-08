@@ -12,15 +12,14 @@ class WikiBrowser(lang: String) {
 
   def getRealArticle(name: String): Article = {
     val page = browser.get(getUrl(name))
-      Article(page.title.split(" — ")(0), page.location.replace(getUrl(""), ""))
+      Article(page.location.replace(getUrl(""), ""), page.title.split(" — ")(0))
   }
-
 
   def getLinkElements(name: String): Iterable[Element] = {
     (browser.get(getUrl(name)) >> element("#mw-content-text"))
       .children.head.children
       .filter(_.tagName == "p")
-      .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal)"))
+      .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal):not(.extiw)"))
       .filter(_.hasAttr("href"))
       .filter(_.hasAttr("title"))
       .filterNot(_.attr("href").startsWith("#"))

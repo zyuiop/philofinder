@@ -1,7 +1,7 @@
 package net.zyuiop.philofinder
 
-import scala.collection.mutable
-import scala.collection.mutable.Queue
+import scala.collection.immutable.Queue
+
 
 /**
   * @author Louis Vialar
@@ -14,86 +14,56 @@ object ShortestPathFinder {
     val page = Input.readInput("Wikipedia Page", "Spécial:Page_au_hasard")
     val searched = Input.readInput("Target Wikipedia Page", "Philosophie")
 
-    /*val searcher = new ShortestFinder(searched, browser)
-    searcher.next(ShortestStatus(page, page, 0, Set()))*/
-
-    bfs(Article(page, page), browser, searched)
+    findShortestPath(browser.getRealArticle(page), searched, browser)
   }
 
-  /*class ShortestFinder(targetPage: String, browser: WikiBrowser) {
-    def next(status: ShortestStatus): Unit = status match {
-      case ShortestStatus(currentPage: String, currentPageTitle: String, hops: Int, previousPages: Set[String]) =>
-
-
-
-
-
-        println(hops + ": " + currentPageTitle + " [[" + currentPage + "]]")
-
-        if (currentPage.equalsIgnoreCase(targetPage) || currentPageTitle.equalsIgnoreCase(targetPage)) {
-          println("==> Found target page " + targetPage + " in " + hops + " hops!")
-        } else if (status.previousPages(currentPage)) {
-          println("==> Found loop on page " + currentPage + " after " + hops + " hops!")
-        } else {
-          val nextPage = browser.getFirstLink(currentPage)
-
-          if (nextPage == null) {
-            println("==> End: no link found")
-          } else {
-            next(ShortestStatus(nextPage._1, nextPage._2, hops + 1, previousPages + currentPage))
-          }
-        }
-    }
-
+  def findShortestPath(start: Article, target: String, browser: WikiBrowser): Unit = {
+    println("Starting from " + start.name)
+    val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
+    println()
+    println("Chemin trouvé en " + (route.length - 1) + " clics")
+    printRoute(0, route)
   }
 
-  case class ShortestStatus(currentPage: String, currentPageTitle: String, hops: Int, previousPages: Set[String])
-  case class PotentialPath(currentPage: Article, previousPages: List[Article])
-*/
-  def bfs(start: Article, browser: WikiBrowser, target: String) = {
-    var q: mutable.Queue[Article] = mutable.Queue()
-    var parents: mutable.Map[String, (Article, Int)] = mutable.Map() // parents on the shortest path
 
-    val real = browser.getRealArticle(start.url)
+  case class Status(queue: Queue[Article], parents: Map[String, Article])
 
-    parents.put(real.url, (null, 0))
-    q.enqueue(real)
+  class FoldResult
+  case class NotFoundFoldResult(queue: Queue[Article], parents: Map[String, Article]) extends FoldResult
+  case class FoundFoldResult(parents: Map[String, Article], foundTarget: Article = null) extends FoldResult
 
-    println("Starting from " + real.name)
-
-    var cont = true
-    var targetArticle: Article = null
-
-    while (q.nonEmpty && cont) {
-      val elem = q.dequeue
-      val depth = parents(elem.url)._2
-
+  def functionnalBfs(browser: WikiBrowser, target: String, status: Status): List[Article] = status match {
+    case Status(queue, parents) =>
+      val deq = queue.dequeue
+      val elem = deq._1
+      val nQueue = deq._2
       val links = browser.getLinks(elem.url)
 
-      println("-----" + elem + "-" + depth + "------")
-      links.foreach(println)
+      println(" ... Finding links for page " + elem.name)
 
-        links
-        .filter(art => !parents.keySet(art.url))
-        .foreach(art => {
-            if (cont) {
-              q.enqueue(art)
-
-              if (art.name.equalsIgnoreCase(target) || art.url.equalsIgnoreCase(target)) {
-                cont = false
-                targetArticle = art
-              }
-
-              parents.put(art.url, (elem, depth + 1))
+      val result = links.filter(art => !parents.keySet(art.url))
+        .foldLeft(NotFoundFoldResult(nQueue, parents).asInstanceOf[FoldResult])((out, art) => out match {
+          case FoundFoldResult(_, _) => out
+          case NotFoundFoldResult(q, p) =>
+            if (art.name.equalsIgnoreCase(target) || art.url.equalsIgnoreCase(target)) {
+              // If we have the target we return a Found result
+              FoundFoldResult(parents + (art.url -> elem), art)
+            } else {
+              // We just enqueue the current article and add its parents to the map
+              NotFoundFoldResult(q.enqueue(art), p + (art.url -> elem))
             }
-          })
-    }
+        })
 
-    val route = buildRoute(parents, targetArticle).reverse
+      result match {
+        case NotFoundFoldResult(q, p) => functionnalBfs(browser, target, Status(q, p))
+        case FoundFoldResult(p, article) => buildRoute(p, article).reverse
+      }
+  }
 
-    println("Chemin trouvé en " + (route.length - 1) + " clics")
-
-    printRoute(0, route)
+  def buildRoute(parents: Map[String, Article], current: Article): List[Article] = {
+    val parent = parents(current.url)
+    if (parent == null) current :: Nil
+    else current :: buildRoute(parents, parent)
   }
 
   def printRoute(hop: Int, list: List[Article]): Unit = {
@@ -101,26 +71,6 @@ object ShortestPathFinder {
     println(hop + ": " + list.head.name + " [[" + list.head.url + "]]")
     printRoute(hop + 1, list.tail)
   }
-
-  def buildRoute(parents: mutable.Map[String, (Article, Int)], current: Article): List[Article] = {
-    val parent = parents(current.url)._1
-    if (parent == null) current :: Nil
-    else current :: buildRoute(parents, parent)
-  }
-
-  /*
-  ParcoursLargeur(Graphe G, Sommet s):
-       f = CreerFile();
-       f.enfiler(s);
-       marquer(s);
-       tant que la file est non vide
-                s = f.defiler();
-                afficher(s);
-                pour tout voisin t de s dans G
-                         si t non marqué
-                                 f.enfiler(t);
-                                 marquer(t);
-   */
 }
 
 
