@@ -29,7 +29,8 @@ object PhiloFinder {
     def getFirstLink(name: String): (String, String) = {
       val url = getUrl(name)
       val content = (browser.get(url) >> element("#mw-content-text")).children.head
-      val links = content.children.filter(_.tagName == "p") flatMap (_ >> elements("a:not(.new):not(.selflink)"))
+      val links = content.children.filter(_.tagName == "p") flatMap
+        (_ >> elements("a:not(.new):not(.selflink):not(.internal)")) filter (_.hasAttr("href")) filter (_.hasAttr("title")) filterNot (_.attr("href").startsWith("#"))
 
       if (links.isEmpty) null
       else {
@@ -54,7 +55,7 @@ object PhiloFinder {
       case Status(currentPage: String, currentPageTitle: String, hops: Int, previousPages: Set[String]) =>
         println(hops + ": " + currentPageTitle + " [[" + currentPage + "]]")
 
-        if (currentPage.equalsIgnoreCase(targetPage)) {
+        if (currentPage.equalsIgnoreCase(targetPage) || currentPageTitle.equalsIgnoreCase(targetPage)) {
           println("==> Found target page " + targetPage + " in " + hops + " hops!")
         } else if (status.previousPages(currentPage)) {
           println("==> Found loop on page " + currentPage + " after " + hops + " hops!")
