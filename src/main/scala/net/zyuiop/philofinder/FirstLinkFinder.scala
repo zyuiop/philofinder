@@ -11,8 +11,12 @@ object FirstLinkFinder {
     val page = Input.readInput("Wikipedia Page", "Spécial:Page_au_hasard")
     val searched = Input.readInput("Target Wikipedia Page", "Philosophie")
 
-    val searcher = new Searcher(searched, browser)
-    searcher.next(Status(Article(page, page), 0, Set()))
+    findFirstLinkPath(Article(page, page), searched, browser)
+  }
+
+  def findFirstLinkPath(start: Article, target: String, browser: WikiBrowser): Unit = {
+    val searcher = new Searcher(target, browser)
+    searcher.next(Status(start, 0, Set()))
   }
 
   class Searcher(targetPage: String, browser: WikiBrowser) {
