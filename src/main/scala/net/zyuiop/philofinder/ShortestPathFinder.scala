@@ -34,6 +34,11 @@ object ShortestPathFinder {
 
   def functionnalBfs(browser: WikiBrowser, target: String, status: Status): List[Article] = status match {
     case Status(queue, parents) =>
+      if (queue.isEmpty) {
+        println("Hitler not found!")
+        return List()
+      }
+
       val deq = queue.dequeue
       val elem = deq._1
       val nQueue = deq._2

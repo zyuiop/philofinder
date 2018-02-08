@@ -94,6 +94,8 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     val start = article
     val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
 
+    if (route.isEmpty) return
+
     val tweet = buildTweet(ComputedPath(start, route))
 
     println("Generated tweet, queueing.")
@@ -168,13 +170,16 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     val requestsFile = File("requests.tst")
 
     if (tweetsFile.exists) {
-      Source.fromFile("tweets.tst").mkString.split(saveSeparator).foreach(tweet => readyUser.enqueue(tweet))
-      println("Loaded tweets: " + readyUser)
+      val data = Source.fromFile("tweets.tst")
+      if (data.nonEmpty)
+        data.mkString.split(saveSeparator).foreach(tweet => readyUser.enqueue(tweet))
     }
 
     if (requestsFile.exists) {
-      Source.fromFile("requests.tst").mkString.split(saveSeparator).foreach(request => waitingUser.enqueue(browser.getRealArticle(request)))
-      println("Loaded requests: " + waitingUser)
+      val data = Source.fromFile("requests.tst")
+
+      if (data.nonEmpty)
+        data.mkString.split(saveSeparator).foreach(request => waitingUser.enqueue(browser.getRealArticle(request)))
     }
 
   }
