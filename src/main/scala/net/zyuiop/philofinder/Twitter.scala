@@ -62,7 +62,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           println(tweetContent)
           try {
             val article = browser.getRealArticle(tweetContent)
-            client.createDirectMessage(t.user.get.screen_name, "I've heard your request! I'll search Adolf Hitler starting from " + article.name + " [[" + article.url + "]]")
+            client.createDirectMessage(t.user.get.screen_name, "J'ai bien reçu votre demande! Je vais chercher la page Adolf Hitler en partant de " + article.name + " [[" + article.url + "]]")
             waitingUser.enqueue(article)
           } catch {
             case _ => client.favoriteStatus(t.id)
@@ -119,13 +119,13 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def buildTweet(computedPath: ComputedPath): String = {
     def printRoute(hop: Int, list: List[Article], acc: String): String = {
-      val hopName = if (hop == 0) "Start" else hop
+      val hopName = if (hop == 0) "\uD83C\uDFE0" else "⮑"
 
       if (list.isEmpty) acc
-      else printRoute(hop + 1, list.tail, acc + "\n" + hopName + ": " + list.head.name)
+      else printRoute(hop + 1, list.tail, acc + "\n" + hopName + " " + list.head.name)
     }
 
-    printRoute(0, computedPath.path, "Reach " + target + " from " + computedPath.source.name + ":")
+    printRoute(0, computedPath.path, computedPath.source.name + " vers " + target + " :") + "\nTotal : " + (computedPath.path.length - 1) + " pages"
   }
 
   def tweetNext(): Unit = {
@@ -135,7 +135,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
     if (readyUser.nonEmpty) {
       lastTweet = System.currentTimeMillis()
-      tweet(readyUser.dequeue())
+      // tweet(readyUser.dequeue())
     } else if (readyAuto.nonEmpty) {
       lastTweet = System.currentTimeMillis()
       tweet(readyAuto.dequeue())
