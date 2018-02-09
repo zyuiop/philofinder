@@ -46,7 +46,7 @@ object ShortestPathFinder {
 
       println(" ... Finding links for page " + elem.name)
 
-      val result = links.filter(art => !parents.keySet(art.url))
+      val result = links.toSet.filter(art => !parents.keySet(art.url))
         .foldLeft(NotFoundFoldResult(nQueue, parents).asInstanceOf[FoldResult])((out, art) => out match {
           case FoundFoldResult(_, _) => out
           case NotFoundFoldResult(q, p) =>

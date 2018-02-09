@@ -62,7 +62,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           println(tweetContent)
           try {
             val article = browser.getRealArticle(tweetContent)
-            client.createDirectMessage(t.user.get.screen_name, "J'ai bien reçu votre demande! Je vais chercher la page " + target + " en partant de " + article.name + " [[" + article.url + "]]")
+            client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irais chercher " + article.name, in_reply_to_status_id = Option.apply(t.id))
             waitingUser.enqueue(article)
           } catch {
             case _ => client.favoriteStatus(t.id)
@@ -145,10 +145,12 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   }
 
   def tweet(tweet: String): Unit = {
-    client.createTweet(status = tweet).andThen {
+    client.createTweet(status = tweet).onComplete {
       case Success(t: Tweet) =>
         println("Tweeted: " + tweet)
-      case Failure(ex: Throwable) => ex.printStackTrace()
+      case Failure(ex: Throwable) =>
+        ex.printStackTrace()
+        readyUser.enqueue(tweet) // re-enqueue tweet to avoid it being discarded
     }
   }
 
@@ -157,23 +159,33 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   def save(): Unit = {
     println("Saving data...")
     val tweetsFile = File("tweets.tst")
+    val autoTweetsFile = File("auto-tweets.tst")
     val requestsFile = File("requests.tst")
     val tweets = readyUser.mkString(saveSeparator)
+    val autoTweets = readyAuto.mkString(saveSeparator)
     val requests = waitingUser.map(q => q.url).mkString(saveSeparator)
     requestsFile.writeAll(requests)
     tweetsFile.writeAll(tweets)
+    autoTweetsFile.writeAll(autoTweets)
 
     println("Saved data!")
   }
 
   def load(): Unit = {
     val tweetsFile = File("tweets.tst")
+    val autoTweetsFile = File("auto-tweets.tst")
     val requestsFile = File("requests.tst")
 
     if (tweetsFile.exists) {
       val data = Source.fromFile("tweets.tst")
       if (data.nonEmpty)
         data.mkString.split(saveSeparator).foreach(tweet => readyUser.enqueue(tweet))
+    }
+
+    if (autoTweetsFile.exists) {
+      val data = Source.fromFile("auto-tweets.tst")
+      if (data.nonEmpty)
+        data.mkString.split(saveSeparator).foreach(tweet => readyAuto.enqueue(tweet))
     }
 
     if (requestsFile.exists) {
