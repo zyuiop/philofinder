@@ -19,7 +19,11 @@ class WikiBrowser(lang: String) {
 
   def searchRealArticle(name: String): Article = {
     val page = browser.get(getSearchUrl(name))
-      Article(page.location.replace(getUrl(""), ""), page.title.split(" — ")(0))
+
+    if (!page.location.startsWith(getUrl("")))
+      throw new Exception("Article not found")
+
+    Article(page.location.replace(getUrl(""), ""), page.title.split(" — ")(0))
   }
 
   def getLinkElements(name: String): Iterable[Element] = {
