@@ -104,7 +104,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       if (isTweetable(tweet)) consummer(tweet)
       else println("!! path not tweetable " + route)
     } catch {
-      case e: _ =>
+      case e: Throwable =>
         e.printStackTrace()
         onError
     }
