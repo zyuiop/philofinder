@@ -115,12 +115,14 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     logger.info("----- STATE LOG ------")
     logger.info("Requests queue: " + privateQueue.length)
     logger.info("Tweets queue: " + publicQueue.length)
+    limits.printStatus(logger)
   }
 
   def buildPath(article: Article, consumer: String => Unit, onError: => Unit = () => ()): Unit = {
     val start = article
     try {
       val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
+      val tweet = buildTweet(ComputedPath(start, route))
       val tweet = buildTweet(ComputedPath(start, route))
 
       logger.info(" -> Generated tweet for route " + route)
