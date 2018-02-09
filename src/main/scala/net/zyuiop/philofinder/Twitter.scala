@@ -96,17 +96,17 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     })
   }
 
-  def repeatIfFailing[A](taskName: String, runnable: => Future[A], onSuccess: A => Unit = a => {},
-                         onFailure: Throwable => Unit = a => {}, retryCnt: Int = 0): Unit = runnable.onComplete {
+  def repeatIfFailing[A](taskName: String, runnable: => Future[A], onSuccess: => Unit = {},
+                         onFailure: => Unit = {}, retryCnt: Int = 0): Unit = runnable.onComplete {
     case Failure(ex: Throwable) =>
       if (retryCnt >= 10) {
         logger.error(" !! Task " + taskName + " failed after 10 retries")
-        onFailure(ex)
+        onFailure
       } else {
         logger.error("  !! Failure on task " + taskName + ", retrying", ex)
         repeatIfFailing(taskName, runnable, onSuccess, onFailure, retryCnt + 1)
       }
-    case Success(a) => onSuccess(a)
+    case Success(a) => onSuccess
   }
 
   def logState(): Unit = {
@@ -190,10 +190,10 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
     if (publicQueue.nonEmpty) {
       val t = publicQueue.dequeue()
-      repeatIfFailing("automatic tweet", client.createTweet(t), a => {
+      repeatIfFailing("automatic tweet", client.createTweet(t), {
         lastTweet = System.currentTimeMillis()
         tweeting = false
-      }, e => {
+      }, {
         tweeting = false
       })
     } else {
