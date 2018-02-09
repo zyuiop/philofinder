@@ -65,7 +65,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           try {
             val article = browser.getRealArticle(tweetContent)
             repeatIfFailing("Reply ok " + t.id,
-              client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irais chercher " + article.name,
+              client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irai chercher " + article.name,
                 in_reply_to_status_id = Option.apply(t.id)))
             waitingUser.enqueue(article)
           } catch {
