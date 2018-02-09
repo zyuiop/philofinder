@@ -104,8 +104,6 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
             case e: Throwable =>
               e.printStackTrace()
               repeatIfFailing("fav not found " + t.id, client.favoriteStatus(t.id))
-              repeatIfFailing("dm not found " + t.id, client.createDirectMessage(t.user.get.screen_name,
-                s"Erreur de recherche : La page '$tweetContent' n'existe pas :("))
           }
         }
     }).recoverWith {
@@ -147,8 +145,8 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
       if (isTweetable(tweet)) consumer(tweet)
       else {
+        consumer("Chemin depuis " + article.name + " trop long pour être tweeté :o")
         logger.warn(" !! path not tweetable")
-        onError
       }
     } catch {
       case e: Throwable =>
@@ -164,14 +162,12 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       buildPath(start, result => {
         waitingReplies.enqueue((result, t))
 
-        if (waitingReplies.lengthCompare(10) > 0)
+        if (waitingReplies.lengthCompare(5) > 0)
           repeatIfFailing("dm delay " + t.id, client.createDirectMessage(t.user.get.screen_name, "J'ai bien calculé un" +
             s" chemin depuis ${start.name}, mais j'ai actuellement beaucoup de demandes en attente. Votre réponse sera" +
             s" tweetée dans ${waitingReplies.length * 25} secondes environ."))
       }, {
         repeatIfFailing("fav error " + t.id, client.favoriteStatus(t.id))
-        repeatIfFailing("dm error " + t.id, client.createDirectMessage(t.user.get.screen_name, " Arf... Désolé, mais " +
-          s"j'ai rencontré un problème en cherchant $target depuis ${start.name} :("))
       })
     }
   }
