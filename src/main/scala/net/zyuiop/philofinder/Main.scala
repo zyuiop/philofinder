@@ -1,7 +1,7 @@
 package net.zyuiop.philofinder
 
 import net.zyuiop.philofinder.FirstLinkFinder.findFirstLinkPath
-import net.zyuiop.philofinder.ShortestPathFinder.findShortestPath
+import net.zyuiop.philofinder.ShortestPathFinder.printShortestPath
 
 /**
   * @author Louis Vialar
@@ -19,7 +19,7 @@ object Main {
     val searched = Input.readInput("Target Wikipedia Page", "Philosophie")
     val search = Input.readChoice("Type of search", Map("fls" -> "First Link Search", "sps" -> "Shortest Path Search"))
 
-    if (search == "sps") findShortestPath(browser.getRealArticle(page), searched, browser)
+    if (search == "sps") printShortestPath(browser.getRealArticle(page), searched, browser)
     else findFirstLinkPath(Article(page, page), searched, browser)
 
     val retry = Input.readChoice("Do it again", Map("yes" -> "Run another search", "no" -> "Quit the script"))

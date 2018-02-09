@@ -10,6 +10,7 @@ import net.zyuiop.philofinder.Twitter.ComputedPath
 import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.io.{Source, StdIn}
 import scala.reflect.io.File
 import scala.util.{Failure, Success}
@@ -42,6 +43,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   val ex: ScheduledExecutorService = Executors.newScheduledThreadPool(4)
   var lastTweet: Long = 0
   var lastDmCheck: Long = 0
+  var tweeting: Boolean = false
 
   def mainLoop(): Unit = {
     load()
@@ -62,10 +64,14 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           println(tweetContent)
           try {
             val article = browser.getRealArticle(tweetContent)
-            client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irais chercher " + article.name, in_reply_to_status_id = Option.apply(t.id))
+            repeatIfFailing("Reply ok " + t.id,
+              client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irais chercher " + article.name,
+                in_reply_to_status_id = Option.apply(t.id)))
             waitingUser.enqueue(article)
           } catch {
-            case _ => client.favoriteStatus(t.id)
+            case e: Throwable =>
+              e.printStackTrace()
+              repeatIfFailing("Like " + t.id, client.favoriteStatus(t.id))
           }
         }
     })
@@ -81,6 +87,19 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     stream.andThen({
       case Success(twitterStream) => twitterStream.close()
     })
+  }
+
+  def repeatIfFailing(taskName: String, runnable: => Future[Any], retryCnt: Int = 0): Unit = {
+    if (retryCnt > 10) {
+      println(" !! Task " + taskName + " failed after 10 retries")
+      return
+    }
+
+    runnable.onComplete {
+      case Failure(ex: Throwable) =>
+        println("  !! Task " + taskName + ": " + ex)
+        repeatIfFailing(taskName, runnable, retryCnt + 1)
+    }
   }
 
   def logState(): Unit = {
@@ -99,10 +118,10 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
       val tweet = buildTweet(ComputedPath(start, route))
 
-      println("Generated tweet, queueing.")
+      println(" -> Generated tweet, queueing " + route)
 
       if (isTweetable(tweet)) consummer(tweet)
-      else println("!! path not tweetable " + route)
+      else println(" !! path not tweetable")
     } catch {
       case e: Throwable =>
         e.printStackTrace()
@@ -111,11 +130,12 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   }
 
   def computeNextPath(): Unit = {
-    println(" -> Computing a path")
     if (waitingUser.nonEmpty) {
+      println("-> Computing a user path")
       val start = waitingUser.dequeue
       buildPath(start, e => readyUser.enqueue(e), () => waitingUser.enqueue(start))
     } else if (readyAuto.lengthCompare(25) < 0) {
+      println("-> Computing a random path " + readyAuto.length)
       val start = browser.getRealArticle(default)
       buildPath(start, e => readyAuto.enqueue(e))
     }
@@ -137,33 +157,43 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   def tweetNext(): Unit = {
     if (lastTweet + 600000 > System.currentTimeMillis)
       return
-    println("Tweeting!")
+    println("-> Trying to tweet")
+
+    if (tweeting) {
+      println(" !! An other tweet is being processed. Cancelling.")
+      return
+    }
+
+    tweeting = true
 
     if (readyUser.nonEmpty) {
-      lastTweet = System.currentTimeMillis()
       tweet(readyUser.dequeue())
     } else if (readyAuto.nonEmpty) {
-      lastTweet = System.currentTimeMillis()
       tweet(readyAuto.dequeue())
     } else {
-      println("!! Nothing to tweet !!")
+      println(" !! Nothing to tweet")
+      tweeting = false
     }
   }
 
   def tweet(tweet: String): Unit = {
     client.createTweet(status = tweet).onComplete {
       case Success(t: Tweet) =>
-        println("Tweeted: " + tweet)
+        println(" :) Tweeted: " + tweet.replaceAll("\n", "<nl>"))
+        tweeting = false
+        lastTweet = System.currentTimeMillis()
       case Failure(ex: Throwable) =>
-        ex.printStackTrace()
+        println(" !! Error tweeting: " + ex)
         readyUser.enqueue(tweet) // re-enqueue tweet to avoid it being discarded
+        tweeting = false
+        ex.printStackTrace(System.out)
     }
   }
 
   val saveSeparator = "<!!TWEETS_SEPARATOR!!>"
 
   def save(): Unit = {
-    println("Saving data...")
+    println("-> Saving data...")
     val tweetsFile = File("tweets.tst")
     val autoTweetsFile = File("auto-tweets.tst")
     val requestsFile = File("requests.tst")
@@ -174,10 +204,11 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     tweetsFile.writeAll(tweets)
     autoTweetsFile.writeAll(autoTweets)
 
-    println("Saved data!")
+    println("-> Saved data!")
   }
 
   def load(): Unit = {
+    println("-> Loading saved data")
     val tweetsFile = File("tweets.tst")
     val autoTweetsFile = File("auto-tweets.tst")
     val requestsFile = File("requests.tst")

@@ -14,12 +14,12 @@ object ShortestPathFinder {
     val page = Input.readInput("Wikipedia Page", "Spécial:Page_au_hasard")
     val searched = Input.readInput("Target Wikipedia Page", "Philosophie")
 
-    findShortestPath(browser.getRealArticle(page), searched, browser)
+    printShortestPath(browser.getRealArticle(page), searched, browser)
   }
 
-  def findShortestPath(start: Article, target: String, browser: WikiBrowser): Unit = {
+  def printShortestPath(start: Article, target: String, browser: WikiBrowser): Unit = {
     println("Starting from " + start.name)
-    val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
+    val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])), verbose = true)
     println()
     println("Chemin trouvé en " + (route.length - 1) + " clics")
     printRoute(0, route)
@@ -32,10 +32,11 @@ object ShortestPathFinder {
   case class NotFoundFoldResult(queue: Queue[Article], parents: Map[String, Article]) extends FoldResult
   case class FoundFoldResult(parents: Map[String, Article], foundTarget: Article = null) extends FoldResult
 
-  def functionnalBfs(browser: WikiBrowser, target: String, status: Status): List[Article] = status match {
+  def functionnalBfs(browser: WikiBrowser, target: String, status: Status, verbose: Boolean = false): List[Article] = status match {
     case Status(queue, parents) =>
       if (queue.isEmpty) {
-        println("Hitler not found!")
+        if (verbose)
+          println("Hitler not found!")
         return List()
       }
 
@@ -44,7 +45,8 @@ object ShortestPathFinder {
       val nQueue = deq._2
       val links = browser.getLinks(elem.url)
 
-      println(" ... Finding links for page " + elem.name)
+      if (verbose)
+        println(" ... Finding links for page " + elem.name)
 
       val result = links.toSet.filter(art => !parents.keySet(art.url))
         .foldLeft(NotFoundFoldResult(nQueue, parents).asInstanceOf[FoldResult])((out, art) => out match {
