@@ -67,8 +67,6 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
     val stream = openStream()
 
-    stream.fallbackTo(openStream())
-
     var cont = true
     while (cont) {
       val q = StdIn.readLine("Quit ? (type y to quit)")
@@ -86,6 +84,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     println("Opening stream...")
     streaming.userEvents()({
       case t: Tweet =>
+        logger.info("Stream: got a tweet " + t)
         if (t.in_reply_to_screen_name.getOrElse("").equalsIgnoreCase(username)
           && t.in_reply_to_status_id.isEmpty
           && t.in_reply_to_status_id_str.isEmpty) {
@@ -103,7 +102,11 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
                     in_reply_to_status_id = Option.apply(t.id)))
           }
         }
-    })
+    }).recoverWith {
+      case e: Throwable =>
+        logger.error("Listener crashed", e)
+        openStream()
+    }
   }
 
   def repeatIfFailing[A](taskName: String, runnable: => Future[A], onSuccess: => Unit = {},
