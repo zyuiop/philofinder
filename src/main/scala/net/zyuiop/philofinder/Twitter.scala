@@ -3,6 +3,7 @@ package net.zyuiop.philofinder
 import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 
 import com.danielasfregola.twitter4s.entities.Tweet
+import com.danielasfregola.twitter4s.http.clients.streaming.TwitterStream
 import com.danielasfregola.twitter4s.{TwitterRestClient, TwitterStreamingClient}
 import com.typesafe.scalalogging.LazyLogging
 import net.zyuiop.philofinder.ShortestPathFinder.{Status, functionnalBfs}
@@ -64,7 +65,26 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
     logger.info("Started twitter bot with target " + target)
 
-    val stream = streaming.userEvents()({
+    val stream = openStream()
+
+    stream.fallbackTo(openStream())
+
+    var cont = true
+    while (cont) {
+      val q = StdIn.readLine("Quit ? (type y to quit)")
+      if (q == "y")
+        cont = false
+    }
+
+    ex.shutdownNow()
+    stream.andThen({
+      case Success(twitterStream) => twitterStream.close()
+    })
+  }
+
+  def openStream(): Future[TwitterStream] = {
+    println("Opening stream...")
+    streaming.userEvents()({
       case t: Tweet =>
         if (t.in_reply_to_screen_name.getOrElse("").equalsIgnoreCase(username)
           && t.in_reply_to_status_id.isEmpty
@@ -77,24 +97,12 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           } catch {
             case e: Throwable =>
               e.printStackTrace()
-              if (limits.tweet)
+              if (limits.tweet())
                 repeatIfFailing("reply not found " + t.id,
                   client.createTweet("@" + t.user.get.screen_name + " La page '" + tweetContent + "' n'existe pas :(",
-                  in_reply_to_status_id = Option.apply(t.id)))
+                    in_reply_to_status_id = Option.apply(t.id)))
           }
         }
-    })
-
-    var cont = true
-    while (cont) {
-      val q = StdIn.readLine("Quit ? (type y to quit)")
-      if (q == "y")
-        cont = false
-    }
-
-    ex.shutdownNow()
-    stream.andThen({
-      case Success(twitterStream) => twitterStream.close()
     })
   }
 
@@ -122,7 +130,6 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     val start = article
     try {
       val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
-      val tweet = buildTweet(ComputedPath(start, route))
       val tweet = buildTweet(ComputedPath(start, route))
 
       logger.info(" -> Generated tweet for route " + route)
