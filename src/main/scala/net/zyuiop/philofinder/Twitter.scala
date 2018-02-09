@@ -40,7 +40,8 @@ object Twitter {
 class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: TwitterStreamingClient, target: String, default: String, username: String) extends LazyLogging {
   val publicQueue: mutable.Queue[String] = mutable.Queue()
   val privateQueue: mutable.Queue[(Article, Tweet)] = mutable.Queue()
-  val ex: ScheduledExecutorService = Executors.newScheduledThreadPool(6)
+  val waitingReplies: mutable.Queue[(String, Tweet)] = mutable.Queue()
+  val ex: ScheduledExecutorService = Executors.newScheduledThreadPool(7)
   var lastTweet: Long = 0
   var lastDmCheck: Long = 0
   var tweeting: Boolean = false
@@ -55,6 +56,9 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     // Replies to individual requests (2 threads to go faster)
     ex.scheduleAtFixedRate(() => computePrivatePath(), 0, 5, TimeUnit.SECONDS)
     ex.scheduleAtFixedRate(() => computePrivatePath(), 0, 5, TimeUnit.SECONDS)
+
+    // Tweets replies to individual requests (every 25 seconds)
+    ex.scheduleAtFixedRate(() => tweetPrivatePath(), 0, 25, TimeUnit.SECONDS)
 
     // Tweets a tweet every 15 minutes (runs more frequently in case of problem)
     ex.scheduleAtFixedRate(() => tweetNext(), 1, 1, TimeUnit.MINUTES)
@@ -84,7 +88,6 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     println("Opening stream...")
     streaming.userEvents()({
       case t: Tweet =>
-        logger.info("Stream: got a tweet " + t.id)
         if (t.in_reply_to_screen_name.getOrElse("").equalsIgnoreCase(username)
           && t.in_reply_to_status_id.isEmpty
           && t.in_reply_to_status_id_str.isEmpty
@@ -100,14 +103,11 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           } catch {
             case e: Throwable =>
               e.printStackTrace()
-              if (limits.tweet())
-                repeatIfFailing("reply not found " + t.id,
-                  client.createTweet("@" + t.user.get.screen_name + " La page '" + tweetContent + "' n'existe pas :(",
-                    in_reply_to_status_id = Option.apply(t.id)))
+              repeatIfFailing("fav not found " + t.id, client.favoriteStatus(t.id))
+              repeatIfFailing("dm not found " + t.id, client.createDirectMessage(t.user.get.screen_name,
+                s"Erreur de recherche : La page '$tweetContent' n'existe pas :("))
           }
         }
-
-        logger.info("Finished handling " + t.id)
     }).recoverWith {
       case e: Throwable =>
         logger.error("Listener crashed", e)
@@ -132,7 +132,9 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     logger.info("----- STATE LOG ------")
     logger.info("Requests queue: " + privateQueue.length)
     logger.info("Tweets queue: " + publicQueue.length)
+    logger.info("Replies queue: " + waitingReplies.length)
     limits.printStatus(logger)
+    logger.info("----- STATE LOG ------")
   }
 
   def buildPath(article: Article, consumer: String => Unit, onError: => Unit = () => ()): Unit = {
@@ -157,21 +159,28 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def computePrivatePath(): Unit = {
     if (privateQueue.nonEmpty) {
-      if (!limits.tweet) {
-        logger.info("-> TweetLimit - slowing down")
-        return
-      }
       logger.info("-> Computing a user path")
       val (start, t) = privateQueue.dequeue
       buildPath(start, result => {
-        repeatIfFailing("reply content " + t.id,
-          client.createTweet("@" + t.user.get.screen_name + " " + result, in_reply_to_status_id = Option.apply(t.id)))
+        waitingReplies.enqueue((result, t))
       }, {
-        repeatIfFailing("reply error " + t.id,
-          client.createTweet("@" + t.user.get.screen_name + " Arf... Désolé, mais j'ai rencontré un problème en cherchant " +
-            s"$target depuis ${start.name} :(", in_reply_to_status_id = Option.apply(t.id)))
+        repeatIfFailing("fav error " + t.id, client.favoriteStatus(t.id))
+        repeatIfFailing("dm error " + t.id, client.createDirectMessage(t.user.get.screen_name, " Arf... Désolé, mais " +
+          s"j'ai rencontré un problème en cherchant $target depuis ${start.name} :("))
       })
     }
+  }
+
+  def tweetPrivatePath(): Unit = if (waitingReplies.nonEmpty) {
+    if (!limits.tweet) {
+      logger.info("-> TweetLimit - slowing down")
+      return
+    }
+
+    logger.info("-> Tweeting a user path")
+    val (tweet, t) = waitingReplies.dequeue
+    repeatIfFailing("reply content " + t.id, client.createTweet("@" + t.user.get.screen_name + " " + tweet,
+      in_reply_to_status_id = Option.apply(t.id)))
   }
 
   def computePublicPath(): Unit = {

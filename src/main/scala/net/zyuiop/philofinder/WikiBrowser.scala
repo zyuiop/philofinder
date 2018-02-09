@@ -34,6 +34,8 @@ class WikiBrowser(lang: String) {
         .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal):not(.extiw)"))
         .filter(_.hasAttr("href"))
         .filter(_.hasAttr("title"))
+        .filterNot(_.attr("href").startsWith("/wiki/Wikipédia:"))
+        .filterNot(_.attr("href").startsWith("/wiki/Spécial:"))
         .filterNot(_.attr("href").startsWith("#"))
     } catch {
       case _: HttpStatusException => List()
