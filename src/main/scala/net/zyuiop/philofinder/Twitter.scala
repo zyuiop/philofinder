@@ -3,7 +3,6 @@ package net.zyuiop.philofinder
 import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 
 import com.danielasfregola.twitter4s.entities.Tweet
-import com.danielasfregola.twitter4s.exceptions.TwitterException
 import com.danielasfregola.twitter4s.{TwitterRestClient, TwitterStreamingClient}
 import com.typesafe.scalalogging.LazyLogging
 import net.zyuiop.philofinder.ShortestPathFinder.{Status, functionnalBfs}
@@ -13,8 +12,7 @@ import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.io.{Source, StdIn}
-import scala.reflect.io.File
+import scala.io.StdIn
 import scala.util.{Failure, Success}
 
 /**
@@ -39,10 +37,9 @@ object Twitter {
 }
 
 class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: TwitterStreamingClient, target: String, default: String, username: String) extends LazyLogging {
-  val readyUser: mutable.Queue[String] = mutable.Queue()
-  val readyAuto: mutable.Queue[String] = mutable.Queue()
-  val waitingUser: mutable.Queue[Article] = mutable.Queue()
-  val ex: ScheduledExecutorService = Executors.newScheduledThreadPool(4)
+  val publicQueue: mutable.Queue[String] = mutable.Queue()
+  val privateQueue: mutable.Queue[(Article, Tweet)] = mutable.Queue()
+  val ex: ScheduledExecutorService = Executors.newScheduledThreadPool(6)
   var lastTweet: Long = 0
   var lastDmCheck: Long = 0
   var tweeting: Boolean = false
@@ -50,8 +47,17 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   def mainLoop(): Unit = {
     load()
 
-    ex.scheduleAtFixedRate(() => computeNextPath(), 0, 10, TimeUnit.SECONDS)
-    ex.scheduleAtFixedRate(() => tweetNext(), 20, 10, TimeUnit.SECONDS)
+    // Fills the queue with paths
+    ex.scheduleAtFixedRate(() => computePublicPath(), 0, 1, TimeUnit.HOURS)
+
+    // Replies to individual requests (2 threads to go faster)
+    ex.scheduleAtFixedRate(() => computePrivatePath(), 0, 5, TimeUnit.SECONDS)
+    ex.scheduleAtFixedRate(() => computePrivatePath(), 0, 5, TimeUnit.SECONDS)
+
+    // Tweets a tweet every 15 minutes (runs more frequently in case of problem)
+    ex.scheduleAtFixedRate(() => tweetNext(), 1, 1, TimeUnit.MINUTES)
+
+    // Logs the status and saves
     ex.scheduleAtFixedRate(() => logState(), 0, 1, TimeUnit.MINUTES)
     ex.scheduleAtFixedRate(() => save(), 0, 1, TimeUnit.MINUTES)
 
@@ -66,14 +72,13 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           println(tweetContent)
           try {
             val article = browser.searchRealArticle(tweetContent)
-            repeatIfFailing("Reply ok " + t.id,
-              client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irai chercher " + article.name,
-                in_reply_to_status_id = Option.apply(t.id)))
-            waitingUser.enqueue(article)
+            privateQueue.enqueue((article, t))
           } catch {
             case e: Throwable =>
               e.printStackTrace()
-              repeatIfFailing("Like " + t.id, client.favoriteStatus(t.id))
+              repeatIfFailing("reply not found " + t.id,
+                client.createTweet("@" + t.user.get.screen_name + " La page '" + tweetContent + "' n'existe pas :(",
+                  in_reply_to_status_id = Option.apply(t.id)))
           }
         }
     })
@@ -91,40 +96,38 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     })
   }
 
-  def repeatIfFailing(taskName: String, runnable: => Future[Any], retryCnt: Int = 0): Unit = {
-    if (retryCnt > 10) {
-      logger.error(" !! Task " + taskName + " failed after 10 retries")
-      return
-    }
-
-    runnable.onComplete {
-      case Failure(ex: Throwable) =>
-        logger.error("  !! Task " + taskName, ex)
-        repeatIfFailing(taskName, runnable, retryCnt + 1)
-      case _ =>
-    }
+  def repeatIfFailing[A](taskName: String, runnable: => Future[A], onSuccess: A => Unit = a => {},
+                         onFailure: Throwable => Unit = a => {}, retryCnt: Int = 0): Unit = runnable.onComplete {
+    case Failure(ex: Throwable) =>
+      if (retryCnt >= 10) {
+        logger.error(" !! Task " + taskName + " failed after 10 retries")
+        onFailure(ex)
+      } else {
+        logger.error("  !! Failure on task " + taskName + ", retrying", ex)
+        repeatIfFailing(taskName, runnable, onSuccess, onFailure, retryCnt + 1)
+      }
+    case Success(a) => onSuccess(a)
   }
 
   def logState(): Unit = {
     logger.info("----- STATE LOG ------")
-    logger.info("User queue: " + readyUser.length)
-    logger.info("Auto queue: " + readyAuto.length)
-    logger.info("User waiting: " + waitingUser.length)
+    logger.info("Requests queue: " + privateQueue.length)
+    logger.info("Tweets queue: " + publicQueue.length)
   }
 
-  def buildPath(article: Article, consummer: String => Unit, onError: => Unit = () => ()): Unit = {
+  def buildPath(article: Article, consumer: String => Unit, onError: => Unit = () => ()): Unit = {
     val start = article
     try {
       val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
-
-      if (route.isEmpty) return
-
       val tweet = buildTweet(ComputedPath(start, route))
 
-      logger.info(" -> Generated tweet, queueing " + route)
+      logger.info(" -> Generated tweet for route " + route)
 
-      if (isTweetable(tweet)) consummer(tweet)
-      else logger.warn(" !! path not tweetable")
+      if (isTweetable(tweet)) consumer(tweet)
+      else {
+        logger.warn(" !! path not tweetable")
+        onError
+      }
     } catch {
       case e: Throwable =>
         e.printStackTrace()
@@ -132,15 +135,28 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     }
   }
 
-  def computeNextPath(): Unit = {
-    if (waitingUser.nonEmpty) {
+  def computePrivatePath(): Unit = {
+    if (privateQueue.nonEmpty) {
       logger.info("-> Computing a user path")
-      val start = waitingUser.dequeue
-      buildPath(start, e => readyUser.enqueue(e), () => waitingUser.enqueue(start))
-    } else if (readyAuto.lengthCompare(25) < 0) {
-      logger.info("-> Computing a random path " + readyAuto.length)
+      val (start, t) = privateQueue.dequeue
+      buildPath(start, result => {
+        repeatIfFailing("reply content " + t.id,
+          client.createTweet("@" + t.user.get.screen_name + " " + result, in_reply_to_status_id = Option.apply(t.id)))
+      }, {
+        repeatIfFailing("reply error " + t.id,
+          client.createTweet("@" + t.user.get.screen_name + " Arf... Désolé, mais j'ai rencontré un problème en cherchant " +
+            s"$target depuis ${start.name} :(", in_reply_to_status_id = Option.apply(t.id)))
+      })
+    }
+  }
+
+  def computePublicPath(): Unit = {
+    if (publicQueue.lengthCompare(25) < 0) {
+      logger.info("-> Computing a random path; current queue length: " + publicQueue.length)
       val start = browser.getRealArticle(default)
-      buildPath(start, e => readyAuto.enqueue(e))
+      buildPath(start, e => publicQueue.enqueue(e))
+
+      computePublicPath() // Calls itself until queue is full
     }
   }
 
@@ -154,11 +170,14 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       else printRoute(hop + 1, list.tail, acc + "\n" + hopName + " " + list.head.name)
     }
 
-    printRoute(0, computedPath.path, computedPath.source.name + " vers " + target + " :\n") + "\n\nTotal : " + (computedPath.path.length - 1) + " pages"
+    if (computedPath.path.isEmpty)
+      s"${computedPath.source.name} vers $target :\n\nAucun chemin trouvé ! :o"
+    else
+      printRoute(0, computedPath.path, s"${computedPath.source.name} vers $target :\n") + "\n\nTotal : " + (computedPath.path.length - 1) + " pages"
   }
 
   def tweetNext(): Unit = {
-    if (lastTweet + 600000 > System.currentTimeMillis)
+    if (lastTweet + 900000 > System.currentTimeMillis)
       return
     logger.info("-> Trying to tweet")
 
@@ -169,44 +188,25 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
     tweeting = true
 
-    if (readyUser.nonEmpty) {
-      tweet(readyUser.dequeue())
-    } else if (readyAuto.nonEmpty) {
-      tweet(readyAuto.dequeue())
+    if (publicQueue.nonEmpty) {
+      val t = publicQueue.dequeue()
+      repeatIfFailing("automatic tweet", client.createTweet(t), a => {
+        lastTweet = System.currentTimeMillis()
+        tweeting = false
+      }, e => {
+        tweeting = false
+      })
     } else {
       logger.error(" !! Nothing to tweet")
       tweeting = false
     }
   }
 
-  def tweet(tweet: String): Unit = {
-    client.createTweet(status = tweet).onComplete(r => {
-      r match {
-        case Success(t: Tweet) =>
-          logger.info(" :) Tweeted: " + tweet.replaceAll("\n", "<nl>"))
-          lastTweet = System.currentTimeMillis()
-        case Failure(ex: TwitterException) if ex.errors.errors.head.code == 187 =>
-          // Duplicate status
-          logger.warn(" !! Error tweeting: " + tweet.replaceAll("\n", "<nl>") + " ==> Status is duplicate")
-        case Failure(ex: Throwable) =>
-          // Unknown error
-          logger.error(" !! Error tweeting", ex)
-          readyUser.enqueue(tweet) // re-enqueue tweet to avoid it being discarded
-      }
-      tweeting = false
-      save()
-    })
-  }
-
   def save(): Unit = {
-    SavingManager.save[String]("tweets.tst", readyUser, a => a)
-    SavingManager.save[String]("auto-tweets.tst", readyAuto, a => a)
-    SavingManager.save[Article]("requests.tst", waitingUser, a => a.url)
+    SavingManager.save[String]("tweets.tst", publicQueue, a => a)
   }
 
   def load(): Unit = {
-    SavingManager.load[String]("tweets.tst", a => a).foreach(readyUser.enqueue(_))
-    SavingManager.load[String]("auto-tweets.tst", a => a).foreach(readyAuto.enqueue(_))
-    SavingManager.load[Article]("requests.tst", browser.getRealArticle).foreach(waitingUser.enqueue(_))
+    SavingManager.load[String]("tweets.tst", a => a).foreach(publicQueue.enqueue(_))
   }
 }
