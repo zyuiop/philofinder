@@ -47,7 +47,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     load()
 
     ex.scheduleAtFixedRate(() => computeNextPath(), 0, 10, TimeUnit.SECONDS)
-    ex.scheduleAtFixedRate(() => tweetNext(), 60, 10, TimeUnit.SECONDS)
+    ex.scheduleAtFixedRate(() => tweetNext(), 20, 10, TimeUnit.SECONDS)
     ex.scheduleAtFixedRate(() => logState(), 0, 1, TimeUnit.MINUTES)
     ex.scheduleAtFixedRate(() => save(), 0, 1, TimeUnit.MINUTES)
 
@@ -109,7 +109,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     if (waitingUser.nonEmpty) {
       val start = waitingUser.dequeue
       buildPath(start, e => readyUser.enqueue(e))
-    } else if (readyAuto.lengthCompare(50) < 0) {
+    } else if (readyAuto.lengthCompare(25) < 0) {
       val start = browser.getRealArticle(default)
       buildPath(start, e => readyAuto.enqueue(e))
     }
@@ -129,7 +129,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   }
 
   def tweetNext(): Unit = {
-    if (lastTweet + 300000 > System.currentTimeMillis)
+    if (lastTweet + 600000 > System.currentTimeMillis)
       return
     println("Tweeting!")
 
