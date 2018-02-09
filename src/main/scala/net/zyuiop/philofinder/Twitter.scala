@@ -99,6 +99,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       case Failure(ex: Throwable) =>
         println("  !! Task " + taskName + ": " + ex)
         repeatIfFailing(taskName, runnable, retryCnt + 1)
+      case _ =>
     }
   }
 
