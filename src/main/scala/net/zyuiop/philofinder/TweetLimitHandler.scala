@@ -5,12 +5,12 @@ package net.zyuiop.philofinder
   */
 class TweetLimitHandler {
   var lastQuarterBegin: Long = 0
-  var remainingTweets: Int = 24 // 25 - 1 (the automatic one)
+  var remainingTweets: Int = 63 // 50 - 2 (the automatic one) + 15 (we don't tweet a lot all the day)
 
   def tweet: Boolean = {
-    if (lastQuarterBegin + 15*60*1000 < System.currentTimeMillis()) {
+    if (lastQuarterBegin + 30*60*1000 < System.currentTimeMillis()) {
       lastQuarterBegin = System.currentTimeMillis()
-      remainingTweets = 24
+      remainingTweets = 63
     }
 
     if (remainingTweets > 0) {
