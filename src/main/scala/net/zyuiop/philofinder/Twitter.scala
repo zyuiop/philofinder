@@ -90,25 +90,31 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     println("User waiting: " + waitingUser.length)
   }
 
-  def buildPath(article: Article, consummer: String => Unit): Unit = {
+  def buildPath(article: Article, consummer: String => Unit, onError: => Unit = () => ()): Unit = {
     val start = article
-    val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
+    try {
+      val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
 
-    if (route.isEmpty) return
+      if (route.isEmpty) return
 
-    val tweet = buildTweet(ComputedPath(start, route))
+      val tweet = buildTweet(ComputedPath(start, route))
 
-    println("Generated tweet, queueing.")
+      println("Generated tweet, queueing.")
 
-    if (isTweetable(tweet)) consummer(tweet)
-    else println("!! path not tweetable " + route)
+      if (isTweetable(tweet)) consummer(tweet)
+      else println("!! path not tweetable " + route)
+    } catch {
+      case e: _ =>
+        e.printStackTrace()
+        onError
+    }
   }
 
   def computeNextPath(): Unit = {
     println(" -> Computing a path")
     if (waitingUser.nonEmpty) {
       val start = waitingUser.dequeue
-      buildPath(start, e => readyUser.enqueue(e))
+      buildPath(start, e => readyUser.enqueue(e), () => waitingUser.enqueue(start))
     } else if (readyAuto.lengthCompare(25) < 0) {
       val start = browser.getRealArticle(default)
       buildPath(start, e => readyAuto.enqueue(e))
