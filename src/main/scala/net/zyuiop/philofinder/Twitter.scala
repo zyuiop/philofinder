@@ -163,6 +163,11 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       val (start, t) = privateQueue.dequeue
       buildPath(start, result => {
         waitingReplies.enqueue((result, t))
+
+        if (waitingReplies.lengthCompare(10) > 0)
+          repeatIfFailing("dm delay " + t.id, client.createDirectMessage(t.user.get.screen_name, "J'ai bien calculé un" +
+            s" chemin depuis ${start.name}, mais j'ai actuellement beaucoup de demandes en attente. Votre réponse sera" +
+            s" tweetée dans ${waitingReplies.length * 25} secondes environ."))
       }, {
         repeatIfFailing("fav error " + t.id, client.favoriteStatus(t.id))
         repeatIfFailing("dm error " + t.id, client.createDirectMessage(t.user.get.screen_name, " Arf... Désolé, mais " +
