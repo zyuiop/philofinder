@@ -22,7 +22,7 @@ object GraphExplorer {
     val startLink = LinkedArticle(start, null, 0)
     val map = functionnalBfs(browser, Status(Queue(startLink), Map(start.url -> startLink)))
     println()
-    saveMap(map)
+    saveMap(map, start.name)
     println(map)
   }
 
@@ -52,8 +52,8 @@ object GraphExplorer {
       functionnalBfs(browser, Status(nq, np))
   }
 
-  def saveMap(map: Map[String, LinkedArticle]): Unit = {
-    File("graph.txt").writeAll(map.toList.map(el => el._1 + " ====> " + el._2.parent.article.url).mkString("\n"))
+  def saveMap(map: Map[String, LinkedArticle], name: String): Unit = {
+    File(name + "_graph.txt").writeAll(map.toList.map(el => el._1 + " ====> " + el._2.parent.article.url).mkString("\n"))
   }
 }
 
