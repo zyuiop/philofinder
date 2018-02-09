@@ -88,11 +88,13 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
         if (t.in_reply_to_screen_name.getOrElse("").equalsIgnoreCase(username)
           && t.in_reply_to_status_id.isEmpty
           && t.in_reply_to_status_id_str.isEmpty) {
+
           val tweetContent = t.text.replaceAll("@[a-zA-Z0-9_-]+", "").trim
-          println(tweetContent)
+          logger.info(s" > extracted page $tweetContent")
           try {
             val article = browser.searchRealArticle(tweetContent)
             privateQueue.enqueue((article, t))
+            logger.info(s" > queued page $article")
           } catch {
             case e: Throwable =>
               e.printStackTrace()
