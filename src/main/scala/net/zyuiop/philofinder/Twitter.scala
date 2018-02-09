@@ -199,14 +199,14 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   }
 
   def save(): Unit = {
-    SavingManager.save[String]("tweets.tst", readyUser, _)
-    SavingManager.save[String]("auto-tweets.tst", readyAuto, _)
-    SavingManager.save[Article]("requests.tst", waitingUser, _.url)
+    SavingManager.save[String]("tweets.tst", readyUser, a => a)
+    SavingManager.save[String]("auto-tweets.tst", readyAuto, a => a)
+    SavingManager.save[Article]("requests.tst", waitingUser, a => a.url)
   }
 
   def load(): Unit = {
-    SavingManager.load[String]("tweets.tst", _).foreach(readyUser.enqueue(_))
-    SavingManager.load[String]("auto-tweets.tst", _).foreach(readyAuto.enqueue(_))
+    SavingManager.load[String]("tweets.tst", a => a).foreach(readyUser.enqueue(_))
+    SavingManager.load[String]("auto-tweets.tst", a => a).foreach(readyAuto.enqueue(_))
     SavingManager.load[Article]("requests.tst", browser.getRealArticle).foreach(waitingUser.enqueue(_))
   }
 }
