@@ -62,7 +62,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           println(tweetContent)
           try {
             val article = browser.getRealArticle(tweetContent)
-            client.createDirectMessage(t.user.get.screen_name, "J'ai bien reçu votre demande! Je vais chercher la page Adolf Hitler en partant de " + article.name + " [[" + article.url + "]]")
+            client.createDirectMessage(t.user.get.screen_name, "J'ai bien reçu votre demande! Je vais chercher la page " + target + " en partant de " + article.name + " [[" + article.url + "]]")
             waitingUser.enqueue(article)
           } catch {
             case _ => client.favoriteStatus(t.id)
@@ -146,7 +146,8 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def tweet(tweet: String): Unit = {
     client.createTweet(status = tweet).andThen {
-      case Success(t: Tweet) => println("Tweeted: " + tweet)
+      case Success(t: Tweet) =>
+        println("Tweeted: " + tweet)
       case Failure(ex: Throwable) => ex.printStackTrace()
     }
   }
