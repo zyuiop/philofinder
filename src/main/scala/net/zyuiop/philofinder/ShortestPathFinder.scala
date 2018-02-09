@@ -62,7 +62,7 @@ object ShortestPathFinder {
         })
 
       result match {
-        case NotFoundFoldResult(q, p) => functionnalBfs(browser, target, Status(q, p))
+        case NotFoundFoldResult(q, p) => functionnalBfs(browser, target, Status(q, p), verbose)
         case FoundFoldResult(p, article) => buildRoute(p, article).reverse
       }
   }

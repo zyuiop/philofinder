@@ -30,7 +30,7 @@ class WikiBrowser(lang: String) {
     try {
       (browser.get(getUrl(name)) >> element("#mw-content-text"))
         .children.head.children
-        .filter(_.tagName == "p")
+        .filter(el => el.tagName == "p" || el.tagName == "ul")
         .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal):not(.extiw)"))
         .filter(_.hasAttr("href"))
         .filter(_.hasAttr("title"))
