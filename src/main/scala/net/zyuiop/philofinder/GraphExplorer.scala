@@ -30,19 +30,17 @@ object GraphExplorer {
 
   case class LinkedArticle(article: Article, parent: LinkedArticle, depth: Int)
 
-  def functionnalBfs(browser: WikiBrowser, status: Status, verbose: Boolean = false): Map[String, LinkedArticle] = status match {
+  def functionnalBfs(browser: WikiBrowser, status: Status): Map[String, LinkedArticle] = status match {
     case Status(queue, parents) =>
       if (queue.isEmpty) {
-        if (verbose)
-          println("Finished!")
+        println("Finished!")
         return parents
       }
 
       val (elem, nQueue) = queue.dequeue
       val links = browser.getLinks(elem.article.url)
 
-      if (verbose)
-        println(" ... Finding links for page " + elem.article.name + " (depth: " + elem.depth + ")")
+      println(" ... Finding links for page " + elem.article.name + " (depth: " + elem.depth + ")")
 
       val (nq, np) = links.toSet.filter(art => !parents.keySet(art.url))
         .foldLeft((nQueue, parents))((out, art) => out match {
