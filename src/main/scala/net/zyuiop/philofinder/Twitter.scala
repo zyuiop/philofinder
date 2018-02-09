@@ -43,6 +43,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   var lastTweet: Long = 0
   var lastDmCheck: Long = 0
   var tweeting: Boolean = false
+  val limits = new TweetLimitHandler
 
   def mainLoop(): Unit = {
     load()
@@ -76,8 +77,9 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           } catch {
             case e: Throwable =>
               e.printStackTrace()
-              repeatIfFailing("reply not found " + t.id,
-                client.createTweet("@" + t.user.get.screen_name + " La page '" + tweetContent + "' n'existe pas :(",
+              if (limits.tweet)
+                repeatIfFailing("reply not found " + t.id,
+                  client.createTweet("@" + t.user.get.screen_name + " La page '" + tweetContent + "' n'existe pas :(",
                   in_reply_to_status_id = Option.apply(t.id)))
           }
         }
@@ -137,6 +139,10 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def computePrivatePath(): Unit = {
     if (privateQueue.nonEmpty) {
+      if (!limits.tweet) {
+        logger.info("-> TweetLimit - slowing down")
+        return
+      }
       logger.info("-> Computing a user path")
       val (start, t) = privateQueue.dequeue
       buildPath(start, result => {
