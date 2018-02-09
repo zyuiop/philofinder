@@ -3,6 +3,7 @@ package net.zyuiop.philofinder
 import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 
 import com.danielasfregola.twitter4s.entities.Tweet
+import com.danielasfregola.twitter4s.exceptions.TwitterException
 import com.danielasfregola.twitter4s.{TwitterRestClient, TwitterStreamingClient}
 import com.typesafe.scalalogging.LazyLogging
 import net.zyuiop.philofinder.ShortestPathFinder.{Status, functionnalBfs}
@@ -179,59 +180,33 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   }
 
   def tweet(tweet: String): Unit = {
-    client.createTweet(status = tweet).onComplete {
-      case Success(t: Tweet) =>
-        logger.info(" :) Tweeted: " + tweet.replaceAll("\n", "<nl>"))
-        tweeting = false
-        lastTweet = System.currentTimeMillis()
-      case Failure(ex: Throwable) =>
-        logger.error(" !! Error tweeting", ex)
-        readyUser.enqueue(tweet) // re-enqueue tweet to avoid it being discarded
-        tweeting = false
-    }
+    client.createTweet(status = tweet).onComplete(r => {
+      r match {
+        case Success(t: Tweet) =>
+          logger.info(" :) Tweeted: " + tweet.replaceAll("\n", "<nl>"))
+          lastTweet = System.currentTimeMillis()
+        case Failure(ex: TwitterException) if ex.errors.errors.head.code == 187 =>
+          // Duplicate status
+          logger.warn(" !! Error tweeting: " + tweet.replaceAll("\n", "<nl>") + " ==> Status is duplicate")
+        case Failure(ex: Throwable) =>
+          // Unknown error
+          logger.error(" !! Error tweeting", ex)
+          readyUser.enqueue(tweet) // re-enqueue tweet to avoid it being discarded
+      }
+      tweeting = false
+      save()
+    })
   }
 
-  val saveSeparator = "<!!TWEETS_SEPARATOR!!>"
-
   def save(): Unit = {
-    logger.info("-> Saving data...")
-    val tweetsFile = File("tweets.tst")
-    val autoTweetsFile = File("auto-tweets.tst")
-    val requestsFile = File("requests.tst")
-    val tweets = readyUser.mkString(saveSeparator)
-    val autoTweets = readyAuto.mkString(saveSeparator)
-    val requests = waitingUser.map(q => q.url).mkString(saveSeparator)
-    requestsFile.writeAll(requests)
-    tweetsFile.writeAll(tweets)
-    autoTweetsFile.writeAll(autoTweets)
-
-    logger.info("-> Saved data!")
+    SavingManager.save("tweets.tst", readyUser, _)
+    SavingManager.save("auto-tweets.tst", readyAuto, _)
+    SavingManager.save[Article]("requests.tst", waitingUser, _.url)
   }
 
   def load(): Unit = {
-    logger.info("-> Loading saved data")
-    val tweetsFile = File("tweets.tst")
-    val autoTweetsFile = File("auto-tweets.tst")
-    val requestsFile = File("requests.tst")
-
-    if (tweetsFile.exists) {
-      val data = Source.fromFile("tweets.tst")
-      if (data.nonEmpty)
-        data.mkString.split(saveSeparator).foreach(tweet => readyUser.enqueue(tweet))
-    }
-
-    if (autoTweetsFile.exists) {
-      val data = Source.fromFile("auto-tweets.tst")
-      if (data.nonEmpty)
-        data.mkString.split(saveSeparator).foreach(tweet => readyAuto.enqueue(tweet))
-    }
-
-    if (requestsFile.exists) {
-      val data = Source.fromFile("requests.tst")
-
-      if (data.nonEmpty)
-        data.mkString.split(saveSeparator).foreach(request => waitingUser.enqueue(browser.getRealArticle(request)))
-    }
-
+    SavingManager.load("tweets.tst", _).foreach(readyUser.enqueue)
+    SavingManager.load("auto-tweets.tst", _).foreach(readyAuto.enqueue)
+    SavingManager.load[Article]("requests.tst", a => browser.getRealArticle(a)).foreach(waitingUser.enqueue(_))
   }
 }
