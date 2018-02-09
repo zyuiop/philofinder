@@ -10,9 +10,15 @@ class WikiBrowser(lang: String) {
   val browser = JsoupBrowser()
 
   def getUrl(name: String): String = "https://" + lang + ".wikipedia.org/wiki/" + name
+  def getSearchUrl(name: String): String = "https://" + lang + ".wikipedia.org/w/index.php?search=" + name
 
   def getRealArticle(name: String): Article = {
     val page = browser.get(getUrl(name))
+      Article(page.location.replace(getUrl(""), ""), page.title.split(" — ")(0))
+  }
+
+  def searchRealArticle(name: String): Article = {
+    val page = browser.get(getSearchUrl(name))
       Article(page.location.replace(getUrl(""), ""), page.title.split(" — ")(0))
   }
 

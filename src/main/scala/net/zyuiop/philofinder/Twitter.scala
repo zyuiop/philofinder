@@ -65,7 +65,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           val tweetContent = t.text.replaceAll("@[a-zA-Z0-9_-]+", "").trim
           println(tweetContent)
           try {
-            val article = browser.getRealArticle(tweetContent)
+            val article = browser.searchRealArticle(tweetContent)
             repeatIfFailing("Reply ok " + t.id,
               client.createTweet("@" + t.user.get.screen_name + " Recherche prise en compte ! J'irai chercher " + article.name,
                 in_reply_to_status_id = Option.apply(t.id)))
