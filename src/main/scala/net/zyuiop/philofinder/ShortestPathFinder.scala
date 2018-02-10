@@ -36,13 +36,16 @@ object ShortestPathFinder {
     case Status(queue, parents) =>
       if (queue.isEmpty) {
         if (verbose)
-          println("Hitler not found!")
+          println(s"$target not found!")
         return List()
       }
 
-      val deq = queue.dequeue
-      val elem = deq._1
-      val nQueue = deq._2
+      val (elem, nQueue) = queue.dequeue
+      if (elem.name.equalsIgnoreCase(target) || elem.url.equalsIgnoreCase(target)) {
+        // For the smart ones trying to fool the bot by sending him the target page as a start page
+        return buildRoute(parents, elem).reverse
+      }
+
       val links = browser.getLinks(elem.url)
 
       if (verbose)

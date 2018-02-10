@@ -98,8 +98,13 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
           logger.info(s" > extracted page $tweetContent")
           try {
             val article = browser.searchRealArticle(tweetContent)
-            privateQueue.enqueue((article, t))
-            logger.info(s" > queued page $article")
+            if (article.name.startsWith("Spécial:") || article.name.startsWith("Wikipédia:")) {
+              repeatIfFailing("fav illegal " + t.id, client.favoriteStatus(t.id))
+              logger.info(s" > illegal page $article")
+            } else {
+              privateQueue.enqueue((article, t))
+              logger.info(s" > queued page $article")
+            }
           } catch {
             case e: Throwable =>
               e.printStackTrace()

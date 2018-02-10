@@ -30,7 +30,10 @@ class WikiBrowser(lang: String) {
     try {
       (browser.get(getUrl(name)) >> element("#mw-content-text"))
         .children.head.children
-        .filter(el => el.tagName == "p" || el.tagName == "ul")
+        .filterNot(el => (el.tagName startsWith "h") ||
+          (el.hasAttr("class") && (
+            el.attr("class").contains("bandeau") || el.attr("class").contains("navbox") || el.attr("class").contains("catlinks")
+            )))
         .flatMap(_ >> elements("a:not(.new):not(.selflink):not(.internal):not(.extiw)"))
         .filter(_.hasAttr("href"))
         .filter(_.hasAttr("title"))

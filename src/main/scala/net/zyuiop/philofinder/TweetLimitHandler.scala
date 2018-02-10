@@ -15,10 +15,8 @@ class TweetLimitHandler {
       remainingTweets = 63
     }
 
-    if (remainingTweets > 0) {
-      remainingTweets -= 1
-      true
-    } else false
+    remainingTweets -= 1
+    remainingTweets >= 0
   }
 
   def printStatus(logger: Logger): Unit = {
