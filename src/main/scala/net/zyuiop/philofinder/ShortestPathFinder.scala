@@ -50,8 +50,7 @@ object ShortestPathFinder {
 
       val result = links.toSet
         .filter(art => !parents.keySet(art.url))
-        .filterNot(_.url.startsWith("Wikipédia:"))
-        .filterNot(_.url.startsWith("Spécial:"))
+        .filterNot(_.name.startsWith("Wikipédia:"))
         .filterNot(_.name.startsWith("Spécial:"))
         .filterNot(_.url.startsWith("Portail:"))
         .foldLeft(NotFoundFoldResult(nQueue, parents).asInstanceOf[FoldResult])((out, art) => out match {
