@@ -1,19 +1,11 @@
-package net.zyuiop.philofinder
+package net.zyuiop.philofinder.cli
+
+import net.zyuiop.philofinder.{Article, WikiBrowser}
 
 /**
   * @author Louis Vialar
   */
 object FirstLinkFinder {
-  def main(args: Array[String]): Unit = {
-    val lang = Input.readInput("Wikipedia Language", "fr")
-    val browser = new WikiBrowser(lang)
-
-    val page = Input.readInput("Wikipedia Page", "Spécial:Page_au_hasard")
-    val searched = Input.readInput("Target Wikipedia Page", "Philosophie")
-
-    findFirstLinkPath(Article(page, page), searched, browser)
-  }
-
   def findFirstLinkPath(start: Article, target: String, browser: WikiBrowser): Unit = {
     val searcher = new Searcher(target, browser)
     searcher.next(Status(start, 0, Set()))
@@ -43,6 +35,3 @@ object FirstLinkFinder {
 
   case class Status(currentPage: Article, hops: Int, previousPages: Set[String])
 }
-
-
-

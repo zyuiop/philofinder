@@ -3,11 +3,13 @@ package net.zyuiop.philofinder
 import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 
 import com.danielasfregola.twitter4s.entities.Tweet
+import com.danielasfregola.twitter4s.entities.enums.WithFilter
 import com.danielasfregola.twitter4s.http.clients.streaming.TwitterStream
 import com.danielasfregola.twitter4s.{TwitterRestClient, TwitterStreamingClient}
 import com.typesafe.scalalogging.LazyLogging
 import net.zyuiop.philofinder.ShortestPathFinder.{Status, functionnalBfs}
 import net.zyuiop.philofinder.Twitter.ComputedPath
+import net.zyuiop.philofinder.helpers.{PersistenceHelper, TweetLimitHandler}
 
 import scala.collection.immutable.Queue
 import scala.collection.mutable
@@ -50,6 +52,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   def mainLoop(): Unit = {
     load()
 
+
     // Fills the queue with paths
     ex.scheduleAtFixedRate(() => computePublicPath(), 0, 1, TimeUnit.HOURS)
 
@@ -86,7 +89,8 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def openStream(): Future[TwitterStream] = {
     println("Opening stream...")
-    streaming.userEvents()({
+
+    streaming.filterStatuses(tracks = Seq(s"@$username"))({
       case t: Tweet =>
         if (t.in_reply_to_screen_name.getOrElse("").equalsIgnoreCase(username)
           && t.in_reply_to_status_id.isEmpty
@@ -162,13 +166,13 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def computePrivatePath(): Unit = {
     if (privateQueue.nonEmpty) {
-      logger.info("-> Computing a user path")
       val (start, t) = privateQueue.dequeue
+      logger.info(s"-> Computing a user path from $start")
       buildPath(start, result => {
         waitingReplies.enqueue((result, t))
 
         if (waitingReplies.lengthCompare(5) > 0)
-          repeatIfFailing("dm delay " + t.id, client.createDirectMessage(t.user.get.screen_name, "J'ai bien calculé un" +
+          repeatIfFailing("dm delay " + t.id, client.createDirectMessageEvent(t.user.get.id, "J'ai bien calculé un" +
             s" chemin depuis ${start.name}, mais j'ai actuellement beaucoup de demandes en attente. Votre réponse sera" +
             s" tweetée dans ${waitingReplies.length * 25} secondes environ."))
       }, {
@@ -220,20 +224,13 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
       return
     logger.info("-> Trying to tweet")
 
-    if (tweeting) {
-      logger.warn(" !! An other tweet is being processed. Cancelling.")
-      return
-    }
-
-    tweeting = true
 
     if (publicQueue.nonEmpty) {
       val t = publicQueue.dequeue()
       repeatIfFailing("automatic tweet", client.createTweet(t), {
         lastTweet = System.currentTimeMillis()
-        tweeting = false
       }, {
-        tweeting = false
+        logger.error("Tweeting failed forever. I will not retry.")
       })
     } else {
       logger.error(" !! Nothing to tweet")
@@ -242,10 +239,10 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
   }
 
   def save(): Unit = {
-    SavingManager.save[String]("tweets.tst", publicQueue, a => a)
+    PersistenceHelper.save[String]("tweets.tst", publicQueue, a => a)
   }
 
   def load(): Unit = {
-    SavingManager.load[String]("tweets.tst", a => a).foreach(publicQueue.enqueue(_))
+    PersistenceHelper.load[String]("tweets.tst", a => a).foreach(publicQueue.enqueue(_))
   }
 }

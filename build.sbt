@@ -4,9 +4,12 @@ version := "0.1"
 
 scalaVersion := "2.12.4"
 
+enablePlugins(UniversalPlugin)
+
+
 libraryDependencies += "net.ruippeixotog" %% "scala-scraper" % "2.1.0"
 resolvers += Resolver.sonatypeRepo("releases")
-libraryDependencies += "com.danielasfregola" %% "twitter4s" % "5.5"
+libraryDependencies += "com.danielasfregola" %% "twitter4s" % "6.2"
 libraryDependencies += "ch.qos.logback"      % "logback-classic" % "1.1.9"
 
 

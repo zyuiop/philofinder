@@ -4,19 +4,9 @@ import scala.collection.immutable.Queue
 
 
 /**
-  * @author Louis Vialar
-  */
+ * @author Louis Vialar
+ */
 object ShortestPathFinder {
-  def main(args: Array[String]): Unit = {
-    val lang = Input.readInput("Wikipedia Language", "fr")
-    val browser = new WikiBrowser(lang)
-
-    val page = Input.readInput("Wikipedia Page", "Spécial:Page_au_hasard")
-    val searched = Input.readInput("Target Wikipedia Page", "Philosophie")
-
-    printShortestPath(browser.getRealArticle(page), searched, browser)
-  }
-
   def printShortestPath(start: Article, target: String, browser: WikiBrowser): Unit = {
     println("Starting from " + start.name)
     val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])), verbose = true)
@@ -29,9 +19,12 @@ object ShortestPathFinder {
   case class Status(queue: Queue[Article], parents: Map[String, Article])
 
   class FoldResult
+
   case class NotFoundFoldResult(queue: Queue[Article], parents: Map[String, Article]) extends FoldResult
+
   case class FoundFoldResult(parents: Map[String, Article], foundTarget: Article = null) extends FoldResult
 
+  @scala.annotation.tailrec
   def functionnalBfs(browser: WikiBrowser, target: String, status: Status, verbose: Boolean = false): List[Article] = status match {
     case Status(queue, parents) =>
       if (queue.isEmpty) {

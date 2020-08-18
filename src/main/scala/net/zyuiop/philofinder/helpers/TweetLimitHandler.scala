@@ -1,4 +1,4 @@
-package net.zyuiop.philofinder
+package net.zyuiop.philofinder.helpers
 
 import com.typesafe.scalalogging.Logger
 

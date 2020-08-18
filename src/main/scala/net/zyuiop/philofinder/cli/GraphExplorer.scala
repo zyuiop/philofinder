@@ -1,8 +1,10 @@
-package net.zyuiop.philofinder
+package net.zyuiop.philofinder.cli
+
+import net.zyuiop.philofinder.helpers.Input
+import net.zyuiop.philofinder.{Article, WikiBrowser}
 
 import scala.collection.immutable.Queue
 import scala.reflect.io.File
-
 
 /**
   * @author Louis Vialar
@@ -30,6 +32,7 @@ object GraphExplorer {
 
   case class LinkedArticle(article: Article, parent: LinkedArticle, depth: Int)
 
+  @scala.annotation.tailrec
   def functionnalBfs(browser: WikiBrowser, status: Status): Map[String, LinkedArticle] = status match {
     case Status(queue, parents) =>
       if (queue.isEmpty) {
@@ -56,6 +59,3 @@ object GraphExplorer {
     File(name + "_graph.txt").writeAll(map.toList.map(el => el._1 + " ====> " + el._2.parent.article.url).mkString("\n"))
   }
 }
-
-
-

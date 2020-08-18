@@ -1,4 +1,4 @@
-package net.zyuiop.philofinder
+package net.zyuiop.philofinder.helpers
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -8,7 +8,7 @@ import scala.reflect.io.File
 /**
   * @author Louis Vialar
   */
-object SavingManager extends LazyLogging {
+object PersistenceHelper extends LazyLogging {
   val saveSeparator = "<!!TWEETS_SEPARATOR!!>"
 
   def save[A](path: String, data: Seq[A], transformer: A => String): Unit = {

@@ -1,12 +1,14 @@
-package net.zyuiop.philofinder
+package net.zyuiop.philofinder.cli
 
-import net.zyuiop.philofinder.FirstLinkFinder.findFirstLinkPath
 import net.zyuiop.philofinder.ShortestPathFinder.printShortestPath
+import net.zyuiop.philofinder.cli.FirstLinkFinder.findFirstLinkPath
+import net.zyuiop.philofinder.helpers.Input
+import net.zyuiop.philofinder.{Article, WikiBrowser}
 
 /**
   * @author Louis Vialar
   */
-object Main {
+object ConsoleApp {
   def main(args: Array[String]): Unit = {
     val lang = Input.readInput("Wikipedia Language", "fr")
     val browser = new WikiBrowser(lang)
