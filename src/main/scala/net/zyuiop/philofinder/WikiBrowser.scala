@@ -21,7 +21,7 @@ class WikiBrowser(lang: String) {
     val page = browser.get(getSearchUrl(name))
 
     if (!page.location.startsWith(getUrl("")))
-      throw new Exception("Article not found")
+      throw new Exception(s"Article $page not found")
 
     Article(page.location.replace(getUrl(""), ""), page.title.split(" — ")(0))
   }

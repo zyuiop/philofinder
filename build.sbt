@@ -4,8 +4,6 @@ version := "0.1"
 
 scalaVersion := "2.12.4"
 
-enablePlugins(UniversalPlugin)
-
 
 libraryDependencies += "net.ruippeixotog" %% "scala-scraper" % "2.1.0"
 resolvers += Resolver.sonatypeRepo("releases")

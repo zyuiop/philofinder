@@ -33,7 +33,7 @@ object Twitter {
     new Twitter(new WikiBrowser(lang), client, TwitterStreamingClient(), target, default, username).mainLoop()
   }
 
-  case class ComputedPath(source: Article, path: List[Article])
+  case class ComputedPath(source: Article, target: String, path: List[Article])
 
   case class State(readyUser: Queue[ComputedPath], readyAutomatic: Queue[ComputedPath])
 
@@ -41,7 +41,7 @@ object Twitter {
 
 class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: TwitterStreamingClient, target: String, default: String, username: String) extends LazyLogging {
   val publicQueue: mutable.Queue[String] = mutable.Queue()
-  val privateQueue: mutable.Queue[(Article, Tweet)] = mutable.Queue()
+  val privateQueue: mutable.Queue[(Article, Tweet, String)] = mutable.Queue()
   val waitingReplies: mutable.Queue[(String, Tweet)] = mutable.Queue()
   val ex: ScheduledExecutorService = Executors.newScheduledThreadPool(7)
   var lastTweet: Long = 0
@@ -100,19 +100,35 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
           val tweetContent = t.text.replaceAll("@[a-zA-Z0-9_-]+", "").trim
           logger.info(s" > extracted page $tweetContent")
-          try {
-            val article = browser.searchRealArticle(tweetContent)
-            if (article.name.startsWith("Spécial:") || article.name.startsWith("Wikipédia:")) {
-              repeatIfFailing("fav illegal " + t.id, client.favoriteStatus(t.id))
-              logger.info(s" > illegal page $article")
-            } else {
-              privateQueue.enqueue((article, t))
-              logger.info(s" > queued page $article")
+
+          val future = if (tweetContent.contains("==&gt;")) {
+            val parts = tweetContent.split("==&gt;").map(_.trim)
+            Future {
+              val src = browser.searchRealArticle(parts(0))
+              val target = browser.searchRealArticle(parts(1)).name
+
+              (src, target)
             }
-          } catch {
+          } else {
+            Future {
+              (browser.searchRealArticle(tweetContent), target)
+            }
+          }
+
+          future.recover {
             case e: Throwable =>
               e.printStackTrace()
               repeatIfFailing("fav not found " + t.id, client.favoriteStatus(t.id))
+              throw e // The re-thrown ex will be lost
+          } foreach {
+            case (src, target) =>
+              if (src.name.startsWith("Spécial:") || src.name.startsWith("Wikipédia:") || target.startsWith("Spécial:") || target.startsWith("Wikipédia:")) {
+                repeatIfFailing("fav illegal " + t.id, client.favoriteStatus(t.id))
+                logger.info(s" > illegal page $src or $target")
+              } else {
+                privateQueue.enqueue((src, t, target))
+                logger.info(s" > queued page $src => $target")
+              }
           }
         }
     }).recoverWith {
@@ -144,11 +160,11 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     logger.info("----- STATE LOG ------")
   }
 
-  def buildPath(article: Article, consumer: String => Unit, onError: => Unit = () => ()): Unit = {
+  def buildPath(article: Article, target: String, consumer: String => Unit, onError: => Unit = () => ()): Unit = {
     val start = article
     try {
       val route = functionnalBfs(browser, target, Status(Queue(start), Map(start.url -> null.asInstanceOf[Article])))
-      val tweet = buildTweet(ComputedPath(start, route))
+      val tweet = buildTweet(ComputedPath(start, target, route))
 
       logger.info(" -> Generated tweet for route " + route)
 
@@ -166,9 +182,9 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
 
   def computePrivatePath(): Unit = {
     if (privateQueue.nonEmpty) {
-      val (start, t) = privateQueue.dequeue
+      val (start, t, target) = privateQueue.dequeue
       logger.info(s"-> Computing a user path from $start")
-      buildPath(start, result => {
+      buildPath(start, target, result => {
         waitingReplies.enqueue((result, t))
 
         if (waitingReplies.lengthCompare(5) > 0)
@@ -197,7 +213,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     if (publicQueue.lengthCompare(25) < 0) {
       logger.info("-> Computing a random path; current queue length: " + publicQueue.length)
       val start = browser.getRealArticle(default)
-      buildPath(start, e => publicQueue.enqueue(e))
+      buildPath(start, target, e => publicQueue.enqueue(e))
 
       computePublicPath() // Calls itself until queue is full
     }
@@ -216,7 +232,7 @@ class Twitter(browser: WikiBrowser, client: TwitterRestClient, streaming: Twitte
     if (computedPath.path.isEmpty)
       s"${computedPath.source.name} vers $target :\n\nAucun chemin trouvé ! :o"
     else
-      printRoute(0, computedPath.path, s"${computedPath.source.name} vers $target :\n") + "\n\nTotal : " + (computedPath.path.length - 1) + " pages"
+      printRoute(0, computedPath.path, s"${computedPath.source.name} vers ${computedPath.target} :\n") + "\n\nTotal : " + (computedPath.path.length - 1) + " pages"
   }
 
   def tweetNext(): Unit = {
